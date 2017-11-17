@@ -9,18 +9,28 @@
 """
 import os
 import sys
+import shutil
 import pickle
 import tarfile
 import zipfile
 import urllib.request
 import datetime as dt
 
-import numpy as np
+# Third-party libraries
+try:
+    import numpy as np
+    from PIL import Image
+    from nltk.tokenize import word_tokenize, sent_tokenize 
+except Exception as ex:
+    raise ModuleNotFoundError('{}'.format(ex))
 
-from PIL import Image  # for ImageDataset
-from nltk.tokenize import word_tokenize, sent_tokenize  # for TextDataset
 
-# Base `Dataset` class
+
+################################################################################################
+# +———————————————————————————————————————————————————————————————————————————————————————————+
+# | Dataset (Base class)
+# +———————————————————————————————————————————————————————————————————————————————————————————+
+################################################################################################
 class Dataset(object):
     """
     Dataset pre-processing base class
@@ -351,10 +361,6 @@ class ImageDataset(Dataset):
         del counter
 
     def __create_image(self, file, return_obj=False):
-        try:
-            from PIL import Image
-        except Exception as ex:
-            raise ModuleNotFoundError('{}'.format(ex))
         img = Image.open(file)
         img = img.resize((self.size, self.size))
         if self.grayscale:
@@ -606,8 +612,8 @@ class WordVectorization(Dataset):
     @property
     def glove_vector(self):
         return self._glove_vector
-    
-        
+
+"""
 if __name__ == '__main__':
     data_dir = 'datasets/flowers'
     save_file = 'datasets/saved/features-{0}x{0}.pkl'
@@ -622,3 +628,4 @@ if __name__ == '__main__':
     # X_train, y_train, X_test, y_test = data.train_test_split(test_size=0.2)
 
     print('\nTrain: X{}\tTest: y{}\tValid: X{}'.format(X_train.shape, y_test.shape, X_val.shape))
+"""
