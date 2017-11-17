@@ -334,7 +334,7 @@ class ImageDataset(Dataset):
             # Interpolation type.
             interpolation = 'spline16' if smooth else 'nearest'
             # Plot image.
-            ax.imshow(imgs[i].reshape((self.size, self.size)), interpolation=interpolation, **kwargs)
+            ax.imshow(imgs[i].reshape((self.size, self.size, self._channel)), interpolation=interpolation, **kwargs)
             # Remove ticks from the plot.
             ax.set_xticks([])
             ax.set_yticks([])
@@ -358,7 +358,10 @@ class ImageDataset(Dataset):
         if self.flatten:
             self._X = np.zeros(shape=[total_images, self.size * self.size * self.channel])
         else:
-            self._X = np.zeros(shape=[total_images, self.size, self.size, self.channel])
+            if self.grayscale:
+                self._X = np.zeros(shape=[total_images, self.size, self.size])
+            else:
+                self._X = np.zeros(shape=[total_images, self.size, self.size, self.channel])
         self._y = np.zeros(shape=[total_images, len(self._labels)])
         # Free memory
         del total_images
@@ -387,6 +390,7 @@ class ImageDataset(Dataset):
 
     def __create_image(self, file, return_obj=False):
         img = Image.open(file)
+        img = self.__rgba2rgb(img)
         img = img.resize((self.size, self.size))
         if self.grayscale:
             img = img.convert('L')
@@ -405,13 +409,13 @@ class ImageDataset(Dataset):
 
     def __rgba2rgb(self, img, background=(255, 255, 255)):
         if img.mode == 'RGBA':
-            img.load()  # required for png.split()
+            img.load()
             new_img = Image.new( "RGB", img.size, color=background)
-            # 3 is the alpha channel
             new_img.paste(img, mask=img.split()[3])
         else:
             new_img = img.convert('RGB')
         return new_img
+
 
 ################################################################################################
 # +———————————————————————————————————————————————————————————————————————————————————————————+
