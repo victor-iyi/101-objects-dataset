@@ -291,8 +291,8 @@ class ImageDataset(Dataset):
 
     :param kwargs:
     """
-    def __init__(self, data_dir,  size=50, grayscale=False, flatten=True, **kwargs):
-        super().__init__(data_dir, **kwargs)
+    def __init__(self,  size=50, grayscale=False, flatten=True, **kwargs):
+        super().__init__(**kwargs)
         self.size = size
         self.grayscale = grayscale
         self.flatten = flatten
@@ -371,8 +371,12 @@ class ImageDataset(Dataset):
         hot[self._labels.index(label)] = 1
         return hot
 
-# !-------------------------------------- Text Dataset --------------------------------------! #
-# `TextDataset` for textual dataset
+
+################################################################################################
+# +———————————————————————————————————————————————————————————————————————————————————————————+
+# | TextDataset
+# +———————————————————————————————————————————————————————————————————————————————————————————+
+################################################################################################
 class TextDataset(Dataset):
     """
     Dataset subclass for pre-processing textual data
@@ -388,8 +392,8 @@ class TextDataset(Dataset):
 
     :param kwargs:
     """
-    def __init__(self, data_dir, window=2, max_word=None, **kwargs):
-        super().__init__(data_dir, **kwargs)
+    def __init__(self, window=2, max_word=None, **kwargs):
+        super().__init__(**kwargs)
         self._window = window
         self._max_word = max_word
 
@@ -478,8 +482,8 @@ class WordVectorization(Dataset):
         
     :param kwargs:
     """
-    def __init__(self, data_dir, size='sm', **kwargs):
-        super().__init__(data_dir, **kwargs)
+    def __init__(self, size='sm', **kwargs):
+        super().__init__(**kwargs)
         self._size = size
         self._glove_url = 'http://nlp.stanford.edu/data/glove.6B.zip'
         self._glove_dir = '.'.join(self._glove_url.split('/')[-1].split('.')[:-1])
