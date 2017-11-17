@@ -321,10 +321,12 @@ class ImageDataset(Dataset):
 
     @property
     def images(self):
+        """Image data"""
         return self._X
 
     @property
     def channel(self):
+        """Image channel"""
         return self._channel
 
     def _process(self):
@@ -362,13 +364,14 @@ class ImageDataset(Dataset):
 
     def __create_image(self, file, return_obj=False):
         img = Image.open(file)
+        img = self.__rgba2rgb(img)
         img = img.resize((self.size, self.size))
         if self.grayscale:
             img = img.convert('L')
         if return_obj:
             return img
         # convert to np.array
-        img = np.array(img, dtype=np.float32)
+        img = np.array(img, dtype=float)
         if self.flatten:
             img = img.flatten()
         return img
@@ -378,36 +381,15 @@ class ImageDataset(Dataset):
         hot[self._labels.index(label)] = 1
         return hot
 
-    def __rgba2rgb(self, force=False):
-        if os.path.isdir(self.dest_dir) and len(os.listdir(self.dest_dir)) > 1 and not force:
-            sys.stderr.write('{} already exist.'.format(self.dest_dir))
-            sys.stderr.flush()
-            return
-
-        # Clear dest directory
-        shutil.rmtree(self.dest_dir, ignore_errors=True)
-        os.makedirs(self.dest_dir)
-        files = os.listdir(self.data_dir)
-        for i, each in enumerate(files):
-            try:
-                png = Image.open(os.path.join(self.data_dir, each))
-                if png.mode == 'RGBA':
-                    png.load()  # required for png.split()
-                    background = Image.new( "RGB", png.size, color=self._background)
-                    # 3 is the alpha channel
-                    background.paste(png, mask=png.split()[3])
-                    background.save(os.path.join(self.dest_dir, each.split('.')[0] + '.jpg'), 'JPEG')
-                else:
-                    png.convert('RGB')
-                    png.save(os.path.join(self.dest_dir,
-                                          each.split('.')[0] + '.jpg'), 'JPEG')
-            except Exception as e:
-                sys.stderr.write(f'{e} – {png.filename}\n')
-                os.unlink(os.path.join(self.dest_dir,
-                                       each.split('.')[0] + '.jpg'))
-            finally:
-                sys.stdout.write('\r{:,} of {:,}'.format(i + 1, len(files)))
-        del files
+    def __rgba2rgb(self, img, background=(255, 255, 255)):
+        if img.mode == 'RGBA':
+            img.load()  # required for png.split()
+            new_img = Image.new("RGB", img.size, color=background)
+            # 3 is the alpha channel
+            new_img.paste(img, mask=img.split()[3])
+        else:
+            new_img = img.convert('RGB')
+        return new_img
 
 ################################################################################################
 # +———————————————————————————————————————————————————————————————————————————————————————————+
