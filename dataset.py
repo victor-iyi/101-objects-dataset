@@ -319,6 +319,29 @@ class ImageDataset(Dataset):
         del img_file
         del img
 
+    def visualize(self, imgs, name=None, smooth=False, **kwargs):
+        try:
+            import matplotlib.pyplot as plt
+        except ModuleNotFoundError as e:
+            sys.stderr.write(f'{e}\n')
+            sys.stderr.flush()
+        grid = int(np.sqrt(len(imgs)))
+        # Create figure with sub-plots.
+        fig, axes = plt.subplots(grid, grid)
+        fig.subplots_adjust(hspace=0.3, wspace=0.3)
+
+        for i, ax in enumerate(axes.flat):
+            # Interpolation type.
+            interpolation = 'spline16' if smooth else 'nearest'
+            # Plot image.
+            ax.imshow(imgs[i].reshape((self.size, self.size)), interpolation=interpolation, **kwargs)
+            # Remove ticks from the plot.
+            ax.set_xticks([])
+            ax.set_yticks([])
+        if name:
+            plt.suptitle(name)
+        plt.show()
+    
     @property
     def images(self):
         """Image data"""
@@ -352,7 +375,7 @@ class ImageDataset(Dataset):
                     self._X[counter, :] = img
                     self._y[counter, :] = hot_label
                 except Exception as e:
-                    sys.stderr.write('{}'.format(e))
+                    sys.stderr.write(f'ERR_CREATE: {e}\n')
                     sys.stderr.flush()
                 finally:
                     counter += 1
@@ -364,7 +387,6 @@ class ImageDataset(Dataset):
 
     def __create_image(self, file, return_obj=False):
         img = Image.open(file)
-        img = self.__rgba2rgb(img)
         img = img.resize((self.size, self.size))
         if self.grayscale:
             img = img.convert('L')
@@ -384,7 +406,7 @@ class ImageDataset(Dataset):
     def __rgba2rgb(self, img, background=(255, 255, 255)):
         if img.mode == 'RGBA':
             img.load()  # required for png.split()
-            new_img = Image.new("RGB", img.size, color=background)
+            new_img = Image.new( "RGB", img.size, color=background)
             # 3 is the alpha channel
             new_img.paste(img, mask=img.split()[3])
         else:
