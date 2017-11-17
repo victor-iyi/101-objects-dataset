@@ -352,6 +352,7 @@ class ImageDataset(Dataset):
         return self._channel
 
     def _process(self):
+        # TODO: Consider using `cv2` for image pre-processing
         img_dirs = [os.path.join(self._data_dir, l) for l in self._labels]
         total_images = sum([len(os.listdir(d)) for d in img_dirs])
         if self.flatten:
