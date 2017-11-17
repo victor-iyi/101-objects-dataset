@@ -17,7 +17,8 @@ import datetime as dt
 
 import numpy as np
 
-from nltk.tokenize import word_tokenize, sent_tokenize
+from PIL import Image  # for ImageDataset
+from nltk.tokenize import word_tokenize, sent_tokenize  # for TextDataset
 
 # Base `Dataset` class
 class Dataset(object):
@@ -371,6 +372,36 @@ class ImageDataset(Dataset):
         hot[self._labels.index(label)] = 1
         return hot
 
+    def __rgba2rgb(self, force=False):
+        if os.path.isdir(self.dest_dir) and len(os.listdir(self.dest_dir)) > 1 and not force:
+            sys.stderr.write('{} already exist.'.format(self.dest_dir))
+            sys.stderr.flush()
+            return
+
+        # Clear dest directory
+        shutil.rmtree(self.dest_dir, ignore_errors=True)
+        os.makedirs(self.dest_dir)
+        files = os.listdir(self.data_dir)
+        for i, each in enumerate(files):
+            try:
+                png = Image.open(os.path.join(self.data_dir, each))
+                if png.mode == 'RGBA':
+                    png.load()  # required for png.split()
+                    background = Image.new( "RGB", png.size, color=self._background)
+                    # 3 is the alpha channel
+                    background.paste(png, mask=png.split()[3])
+                    background.save(os.path.join(self.dest_dir, each.split('.')[0] + '.jpg'), 'JPEG')
+                else:
+                    png.convert('RGB')
+                    png.save(os.path.join(self.dest_dir,
+                                          each.split('.')[0] + '.jpg'), 'JPEG')
+            except Exception as e:
+                sys.stderr.write(f'{e} – {png.filename}\n')
+                os.unlink(os.path.join(self.dest_dir,
+                                       each.split('.')[0] + '.jpg'))
+            finally:
+                sys.stdout.write('\r{:,} of {:,}'.format(i + 1, len(files)))
+        del files
 
 ################################################################################################
 # +———————————————————————————————————————————————————————————————————————————————————————————+
@@ -466,6 +497,12 @@ class TextDataset(Dataset):
         return temp
 
 
+
+################################################################################################
+# +———————————————————————————————————————————————————————————————————————————————————————————+
+# | WordVectorization
+# +———————————————————————————————————————————————————————————————————————————————————————————+
+################################################################################################
 class WordVectorization(Dataset):
     """
     Dataset subclass for pre-processing textual data
