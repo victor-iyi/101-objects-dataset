@@ -18,8 +18,8 @@ import datetime as dt
 # Third-party libraries
 try:
     import numpy as np
-    from PIL import Image
-    from nltk.tokenize import word_tokenize, sent_tokenize 
+    import cv2
+    from nltk.tokenize import word_tokenize 
 except Exception as ex:
     raise ModuleNotFoundError('{}'.format(ex))
 
@@ -127,10 +127,10 @@ class Dataset(object):
 
             if file_path.endswith(".zip"):
                 # Unpack the zip-file.
-                zipfile.ZipFile(file=file_path, mode="r").extractall(download_dir)
+                zipfile.ZipFile(file=file_path, mode="r").extractall(self._data_dir)
             elif file_path.endswith((".tar.gz", ".tgz")):
                 # Unpack the tar-ball.
-                tarfile.open(name=file_path, mode="r:gz").extractall(download_dir)
+                tarfile.open(name=file_path, mode="r:gz").extractall(self._data_dir)
 
             print("Done.")
         else:
@@ -302,118 +302,45 @@ class ImageDataset(Dataset):
     """
     def __init__(self,  size=50, grayscale=False, flatten=True, **kwargs):
         super().__init__(**kwargs)
-        self.size = size
-        self.grayscale = grayscale
-        self.flatten = flatten
-
-        self._labels = [l for l in os.listdir(self._data_dir) if l[0] is not '.']
-        # First image
-        img_dir = os.path.join(self._data_dir, self._labels[0])
-        img_file = os.path.join(img_dir, os.listdir(img_dir)[1])
-        img = self.__create_image(img_file, return_obj=True)
-        self._channel = img.im.bands
-        # free memory
-        del img_dir
-        del img_file
-        del img
+        self._size = size
+        self._grayscale = grayscale
+        self._flatten = flatten
+        # determine image channel
+        self._channel = 1 if grayscale else 3
 
     def visualize(self, imgs, name=None, smooth=False, **kwargs):
-        try:
-            import matplotlib.pyplot as plt
-        except ModuleNotFoundError as e:
-            sys.stderr.write(f'{e}\n')
-            sys.stderr.flush()
-        grid = int(np.sqrt(len(imgs)))
-        # Create figure with sub-plots.
-        fig, axes = plt.subplots(grid, grid)
-        fig.subplots_adjust(hspace=0.3, wspace=0.3)
+        return self._visualize(imgs, name=name, smooth=smooth, **kwargs)
 
-        for i, ax in enumerate(axes.flat):
-            # Interpolation type.
-            interpolation = 'spline16' if smooth else 'nearest'
-            # Plot image.
-            ax.imshow(imgs[i].reshape((self.size, self.size, self._channel)), interpolation=interpolation, **kwargs)
-            # Remove ticks from the plot.
-            ax.set_xticks([])
-            ax.set_yticks([])
-        if name:
-            plt.suptitle(name)
-        plt.show()
-    
     @property
     def images(self):
-        """Image data"""
         return self._X
 
     @property
     def channel(self):
-        """Image channel"""
         return self._channel
 
+    @property
+    def size(self):
+        return self._size
+
+    @property
+    def grayscale(self):
+        return self._grayscale
+
+    @property
+    def flatten(self):
+        return self._flatten
+
+    
     def _process(self):
-        # TODO: Consider using `cv2` for image pre-processing
-        img_dirs = [os.path.join(self._data_dir, l) for l in self._labels]
-        total_images = sum([len(os.listdir(d)) for d in img_dirs])
-        if self.flatten:
-            self._X = np.zeros(shape=[total_images, self.size * self.size * self.channel])
-        else:
-            if self.grayscale:
-                self._X = np.zeros(shape=[total_images, self.size, self.size])
-            else:
-                self._X = np.zeros(shape=[total_images, self.size, self.size, self.channel])
-        self._y = np.zeros(shape=[total_images, len(self._labels)])
-        # Free memory
-        del total_images
-        del img_dirs
-        counter = 0
-        for i, label in enumerate(self._labels):
-            image_dir = os.path.join(self._data_dir, label)
-            image_list = [d for d in os.listdir(image_dir) if d[0] is not '.']
-            for j, file in enumerate(image_list):
-                try:
-                    image_file = os.path.join(image_dir, file)
-                    img = self.__create_image(image_file)
-                    hot_label = self.__create_label(label)
-                    self._X[counter, :] = img
-                    self._y[counter, :] = hot_label
-                except Exception as e:
-                    sys.stderr.write(f'ERR_CREATE: {e}\n')
-                    sys.stderr.flush()
-                finally:
-                    counter += 1
-                if self._logging:
-                    sys.stdout.write('\rProcessing {} of {} class labels & {} of {} images'.format(
-                        i + 1, len(self._labels), j + 1, len(image_list)))
-        # Free up memory
-        del counter
+        pass
+    
+    def _read_img(self, filename, return_obj=False):
+        pass
+        
+    def _visualize(self, imgs, name=None, smooth=False, **kwargs):
+        pass
 
-    def __create_image(self, file, return_obj=False):
-        img = Image.open(file)
-        img = self.__rgba2rgb(img)
-        img = img.resize((self.size, self.size))
-        if self.grayscale:
-            img = img.convert('L')
-        if return_obj:
-            return img
-        # convert to np.array
-        img = np.array(img, dtype=float)
-        if self.flatten:
-            img = img.flatten()
-        return img
-
-    def __create_label(self, label):
-        hot = np.zeros(shape=[len(self._labels)], dtype=int)
-        hot[self._labels.index(label)] = 1
-        return hot
-
-    def __rgba2rgb(self, img, background=(255, 255, 255)):
-        if img.mode == 'RGBA':
-            img.load()
-            new_img = Image.new( "RGB", img.size, color=background)
-            new_img.paste(img, mask=img.split()[3])
-        else:
-            new_img = img.convert('RGB')
-        return new_img
 
 
 ################################################################################################
