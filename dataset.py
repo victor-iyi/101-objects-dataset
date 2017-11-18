@@ -511,13 +511,19 @@ class TextDataset(Dataset):
                         self._y[s] = self._to_one_hot(self._word2id[context])
             if self._logging:
                 sys.stdout.write(
-                    '\rProcessing {:,} of {:,} sentences. Time taken: {}'.format(s + 1, len(self._sentences),
-                                                                                 dt.datetime.now() - start_time))
+                    f'\rProcessing {s+1:,} of {len(self._sentences):,} sentences. '
+                    f'Time taken: { dt.datetime.now() - start_time}'
+                )
         # Free memory
         del start_time
 
+    def _to_one_hot(self, idx):
+        temp = np.zeros(shape=[self._vocab_size])
+        temp[idx] = 1.
+        return temp
 
-################################################################################################
+
+    ################################################################################################
 # +———————————————————————————————————————————————————————————————————————————————————————————+
 # | WordVectorization
 # +———————————————————————————————————————————————————————————————————————————————————————————+
