@@ -17,8 +17,10 @@ import datetime as dt
 
 # Third-party libraries
 try:
-    import numpy as np
     import cv2
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as ticker
     from nltk.tokenize import word_tokenize
 except Exception as ex:
     raise ModuleNotFoundError('{}'.format(ex))
@@ -404,12 +406,6 @@ class ImageDataset(Dataset):
 
     def _visualize(self, imgs, name=None, smooth=False, **kwargs):
         # Plot images in grid
-        try:
-            import matplotlib.pyplot as plt
-        except ModuleNotFoundError as e:
-            sys.stderr.write(f'{e}')
-            sys.stderr.flush()
-
         grid = int(np.sqrt(len(imgs)))
         # Create figure with sub-plots.
         fig, axes = plt.subplots(grid, grid)
@@ -474,9 +470,7 @@ class TextDataset(Dataset):
         self._sentences = [word_tokenize(sent) for sent in raw_sentences]
 
         # Free some memory
-        del corpus_text
-        del unique_words
-        del raw_sentences
+        del corpus_text, unique_words, raw_sentences
 
     @property
     def vocab_size(self):
@@ -507,9 +501,8 @@ class TextDataset(Dataset):
                 word_window = sent[start:end]
                 for context in word_window:
                     if context is not word:
-                        # data.append([word, context])
-                        self._X[s] = self._one_hot(self._word2id[word])
-                        self._y[s] = self._one_hot(self._word2id[context])
+                        self._X[s] = self._to_one_hot(self._word2id[word])
+                        self._y[s] = self._to_one_hot(self._word2id[context])
             if self._logging:
                 sys.stdout.write(
                     '\rProcessing {:,} of {:,} sentences. Time taken: {}'.format(s + 1, len(self._sentences),
@@ -517,7 +510,7 @@ class TextDataset(Dataset):
         # Free memory
         del start_time
 
-    def _one_hot(self, idx):
+    def _to_one_hot(self, idx):
         temp = np.zeros(shape=[self._vocab_size])
         temp[idx] = 1.
         return temp
