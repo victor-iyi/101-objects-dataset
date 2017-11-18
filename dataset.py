@@ -90,6 +90,7 @@ class Dataset(object):
         if not os.path.isfile(save_file):
             raise FileNotFoundError(f'{save_file} was not found.')
         with open(save_file, 'rb') as f:
+            # noinspection PyMethodFirstArgAssignment
             self = pickle.load(file=f)
         return self
 
@@ -523,7 +524,7 @@ class TextDataset(Dataset):
         return temp
 
 
-    ################################################################################################
+################################################################################################
 # +———————————————————————————————————————————————————————————————————————————————————————————+
 # | WordVectorization
 # +———————————————————————————————————————————————————————————————————————————————————————————+
