@@ -21,6 +21,7 @@ try:
     import numpy as np
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
+    from PIL import Image
     from nltk.tokenize import word_tokenize, sent_tokenize
 except Exception as ex:
     raise ModuleNotFoundError(f'{ex}')
@@ -411,9 +412,13 @@ class ImageDataset(Dataset):
         del im_dirs, labels, total_examples, X_shape, y_shape
 
     def _read_img(self, filename, return_obj=False):
-        img = cv2.imread(filename, cv2.IMREAD_COLOR)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if self._grayscale else cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = cv2.resize(img, (self._size, self._size))
+        # img = cv2.imread(filename, cv2.IMREAD_COLOR)
+        # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if self._grayscale else cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # img = cv2.resize(img, (self._size, self._size))
+        img = Image.open(filename)
+        img = img.resize((self._size, self._size))
+        img = img.convert('L') if self._grayscale else img.convert('RGB')
+        img = np.array(img, dtype=int)
         if return_obj:
             return img
         return img.flatten() if self._flatten else img
