@@ -1,3 +1,3 @@
-# <span style="color:brown"> variational-auto-encoder [VAE]
+# 101-objects-recognition
 
-## <span style="color:blue"> by _Victor I. Afolabi_
+## By Victor I. Afolabi
