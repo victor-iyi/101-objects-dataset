@@ -23,7 +23,7 @@ try:
     import matplotlib.ticker as ticker
     from nltk.tokenize import word_tokenize, sent_tokenize
 except Exception as ex:
-    raise ModuleNotFoundError('{}'.format(ex))
+    raise ModuleNotFoundError(f'{ex}')
 
 
 ################################################################################################
