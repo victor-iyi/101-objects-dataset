@@ -21,7 +21,7 @@ try:
     import numpy as np
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
-    from nltk.tokenize import word_tokenize
+    from nltk.tokenize import word_tokenize, sent_tokenize
 except Exception as ex:
     raise ModuleNotFoundError('{}'.format(ex))
 
@@ -241,16 +241,24 @@ class Dataset(object):
         return self._y
 
     @property
+    def label_names(self):
+        return self._get_labels()
+
+    @property
+    def labels_one_hot(self):
+        return self._get_labels_one_hot()
+
+    @property
+    def num_classes(self):
+        return len(self._get_labels())
+
+    @property
     def num_examples(self):
         return self._num_examples
 
     @property
     def index_in_epoch(self):
         return self._index_in_epoch
-
-    @property
-    def num_classes(self):
-        return len(self._get_labels())
 
     @property
     def epochs_completed(self):
@@ -265,12 +273,8 @@ class Dataset(object):
     def _get_label_dirs(self):
         return sorted([os.path.join(self._data_dir, l) for l in os.listdir(self._data_dir) if l[0] != '.'])
 
-    def _one_hot(self, arr):
-        arr, uniques = list(arr), list(set(arr))
-        encoding = np.zeros(shape=[len(arr), len(uniques)], dtype=np.int32)
-        for i, a in enumerate(arr):
-            encoding[i, uniques.index(a)] = 1.
-        return encoding
+    def _get_labels_one_hot(self):
+        return self._one_hot(self._get_labels())
 
     def _annotate(self):
         labels = self._get_labels()
@@ -278,6 +282,14 @@ class Dataset(object):
         for label in labels:
             annotation[label] = [l for l in os.listdir(os.path.join(self._data_dir, label)) if l[0] != '.']
         return annotation
+
+    @staticmethod
+    def _one_hot(arr):
+        arr, uniques = list(arr), list(set(arr))
+        encoding = np.zeros(shape=[len(arr), len(uniques)], dtype=np.int32)
+        for i, a in enumerate(arr):
+            encoding[i, uniques.index(a)] = 1.
+        return encoding
 
     @staticmethod
     def _to_one_hot(arr, index):
@@ -308,7 +320,7 @@ class ImageDataset(Dataset):
     :param data_dir: str
 
     :param size: int default 50
-        Size of the image. The image will be resized 
+        Size of the image. The image will be resize
         into (size, size). Resizing the image doesn't affect the
         image channels but it does affect the shape of the image.
 
@@ -391,8 +403,9 @@ class ImageDataset(Dataset):
                     sys.stderr.flush()
                 finally:
                     counter += 1
-                sys.stdout.write(f'\r{i+1} of {len(im_dirs)} labels\t{j+1} of {len(img_files)} images...')
-                sys.stdout.flush()
+                if self._logging:
+                    sys.stdout.write(f'\r{i+1} of {len(im_dirs)} labels\t{j+1} of {len(img_files)} images...')
+                    sys.stdout.flush()
         # Free memory
         del im_dirs, labels, total_examples, X_shape, y_shape
 
@@ -451,25 +464,18 @@ class TextDataset(Dataset):
         self._max_word = max_word
 
         # TODO: Look into `data_dir`. You may wanna get all files in there and read as a BIG corpus
-        corpus_text = open(self._data_dir, mode='r', encoding='utf-8').read()
+        corpus_text = open(self._data_dir, mode='r', encoding='utf-8').read().lower()
         if self._max_word:
             corpus_text = corpus_text[:self._max_word]
-        corpus_text = corpus_text.lower()
-        try:
-            from nltk import word_tokenize, sent_tokenize
-        except Exception as e:
-            raise ModuleNotFoundError('{}'.format(e))
         # word2id & id2word
         unique_words = set(word_tokenize(corpus_text))
         self._vocab_size = len(unique_words)
         self._word2id = {w: i for i, w in enumerate(unique_words)}
         self._id2word = {i: w for i, w in enumerate(unique_words)}
-
         # Sentences
         raw_sentences = sent_tokenize(corpus_text)
         self._sentences = [word_tokenize(sent) for sent in raw_sentences]
-
-        # Free some memory
+        # free memory
         del corpus_text, unique_words, raw_sentences
 
     @property
@@ -510,11 +516,6 @@ class TextDataset(Dataset):
         # Free memory
         del start_time
 
-    def _to_one_hot(self, idx):
-        temp = np.zeros(shape=[self._vocab_size])
-        temp[idx] = 1.
-        return temp
-
 
 ################################################################################################
 # +———————————————————————————————————————————————————————————————————————————————————————————+
@@ -532,7 +533,7 @@ class WordVectorization(Dataset):
         size of GloVe dimension to be used.
         'sm' => Small file containing 50-D
         'md' => Medium file containing 100-D
-        'lg' => Large file contianing 200-D
+        'lg' => Large file containing 200-D
         'xl' => Extra large file containing 300-D
         
     :param kwargs:
@@ -544,19 +545,18 @@ class WordVectorization(Dataset):
         self._glove_url = 'http://nlp.stanford.edu/data/glove.6B.zip'
         self._glove_dir = '.'.join(self._glove_url.split('/')[-1].split('.')[:-1])
         self._glove_dir = os.path.join(self._data_dir, self._glove_dir)
-
+        # GloVe file to be used
         sizes = ['sm', 'md', 'lg', 'xl']
         GLOVE_FILES = [os.path.join(self._glove_dir, 'glove.6B.50d.txt'),
                        os.path.join(self._glove_dir, 'glove.6B.100d.txt'),
                        os.path.join(self._glove_dir, 'glove.6B.200d.txt'),
                        os.path.join(self._glove_dir, 'glove.6B.300d.txt')]
         if self._size not in sizes:
-            msg = "`size` attribute includes: 'sm', 'md', 'lg', 'xl' for small, medium, large & extra-large respectively"
+            msg = "`size` attribute: 'sm', 'md', 'lg', 'xl' for small, medium, large & extra-large respectively"
             raise ValueError(msg)
         index = sizes.index(self._size)
         self._glove_file = GLOVE_FILES[index]
-
-        # maybe download & extract file
+        # maybe download & extract files
         if not os.path.isfile(self._glove_file):
             confirm = input('Download glove file, 862MB? Y/n: ')
             if 'y' in confirm.lower():
@@ -567,6 +567,19 @@ class WordVectorization(Dataset):
                 raise FileNotFoundError(f'{self.glove_file} was not found. Download file to continue...')
         else:
             print(f'Apparently, `{self._glove_file}` has been downloaded and extracted.')
+        del sizes, index, GLOVE_FILES
+
+    @property
+    def glove_dir(self):
+        return self._glove_dir
+
+    @property
+    def glove_file(self):
+        return self._glove_file
+
+    @property
+    def glove_vector(self):
+        return self._glove_vector
 
     def _process(self):
         # load GloVe word vectors
@@ -577,11 +590,23 @@ class WordVectorization(Dataset):
         # add to word vectors to features
         pass
 
+    def _load_glove(self):
+        self._glove_vector = {}
+        with open(self._glove_file, mode='r', encoding='utf-8') as glove:
+            lines = glove.readlines()
+            for i, line in enumerate(lines):
+                name, vector = line.split(' ', 1)
+                self._glove_vector[name] = np.fromstring(vector, sep=' ')
+                if self._logging:
+                    sys.stdout.write(f'\rLoading {i+1:,} of {len(lines):,}')
+        return
+
     def _sent2seq(self, sentence):
         tokens = word_tokenize(sentence)
         vectors = []
         words = []
         for token in tokens:
+            # noinspection PyBroadException
             try:
                 vector = self._glove_vector[token.lower()]
             except:
@@ -602,29 +627,6 @@ class WordVectorization(Dataset):
 
         ax.set_yticklabels([''] + words)
         plt.show()
-
-    def _load_glove(self):
-        self._glove_vector = {}
-        with open(self._glove_file, mode='r', encoding='utf-8') as glove:
-            lines = glove.readlines()
-            for i, line in enumerate(lines):
-                name, vector = line.split(' ', 1)
-                self._glove_vector[name] = np.fromstring(vector, sep=' ')
-                if self._logging:
-                    sys.stdout.write('\rLoading {:,} of {:,}'.format(i + 1, len(lines)))
-        return
-
-    @property
-    def glove_dir(self):
-        return self._glove_dir
-
-    @property
-    def glove_file(self):
-        return self._glove_file
-
-    @property
-    def glove_vector(self):
-        return self._glove_vector
 
 
 """
