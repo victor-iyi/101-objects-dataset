@@ -19,10 +19,9 @@ import datetime as dt
 try:
     import numpy as np
     import cv2
-    from nltk.tokenize import word_tokenize 
+    from nltk.tokenize import word_tokenize
 except Exception as ex:
     raise ModuleNotFoundError('{}'.format(ex))
-
 
 
 ################################################################################################
@@ -40,6 +39,7 @@ class Dataset(object):
     :param kwargs:
         `logging`: Feedback on background metrics
     """
+
     def __init__(self, data_dir, **kwargs):
         self._data_dir = data_dir
         # Keyword arguments
@@ -48,6 +48,9 @@ class Dataset(object):
         self._num_examples = 0
         self._epochs_completed = 0
         self._index_in_epoch = 0
+        # Features and labels
+        self._X = np.array([])
+        self._y = np.array([])
 
     def create(self):
         """Create datasets"""
@@ -222,11 +225,11 @@ class Dataset(object):
             return np.array([train_X, train_y, test_X, test_y, val_X, val_y])
 
         return np.array([train_X, train_y, test_X, test_y])
-    
+
     @property
     def data_dir(self):
         return self._data_dir
-    
+
     @property
     def features(self):
         return self._X
@@ -245,7 +248,7 @@ class Dataset(object):
 
     @property
     def num_classes(self):
-        return self._y.shape[-1]
+        return len(self._get_labels())
 
     @property
     def epochs_completed(self):
@@ -254,12 +257,31 @@ class Dataset(object):
     def _process(self):
         pass
 
+    def _get_labels(self):
+        return sorted([l for l in os.listdir(self._data_dir) if l[0] != '.'])
+
+    def _get_label_dirs(self):
+        return sorted([os.path.join(self._data_dir, l) for l in os.listdir(self._data_dir) if l[0] != '.'])
+
     def _one_hot(self, arr):
         arr, uniques = list(arr), list(set(arr))
         encoding = np.zeros(shape=[len(arr), len(uniques)], dtype=np.int32)
         for i, a in enumerate(arr):
             encoding[i, uniques.index(a)] = 1.
         return encoding
+
+    def _annotate(self):
+        labels = self._get_labels()
+        annotation = {}
+        for label in labels:
+            annotation[label] = [l for l in os.listdir(os.path.join(self._data_dir, label)) if l[0] != '.']
+        return annotation
+
+    @staticmethod
+    def _to_one_hot(arr, index):
+        one_hot = np.zeros(shape=[len(arr)])
+        one_hot[index] = 1.
+        return one_hot
 
     @staticmethod
     def _print_download_progress(count, block_size, total_size):
@@ -270,7 +292,6 @@ class Dataset(object):
         # Print it.
         sys.stdout.write(msg)
         sys.stdout.flush()
-
 
 
 ################################################################################################
@@ -300,13 +321,19 @@ class ImageDataset(Dataset):
 
     :param kwargs:
     """
-    def __init__(self,  size=50, grayscale=False, flatten=True, **kwargs):
+
+    def __init__(self, size=50, grayscale=False, flatten=True, **kwargs):
         super().__init__(**kwargs)
         self._size = size
         self._grayscale = grayscale
         self._flatten = flatten
-        # determine image channel
-        self._channel = 1 if grayscale else 3
+        # random image
+        im_dir = self._get_label_dirs()[np.random.randint(0, self.num_classes)]
+        im_file = os.path.join(im_dir, os.listdir(im_dir)[np.random.randint(0, len(os.listdir(im_dir)))])
+        img = self._read_img(im_file, return_obj=True)
+        self._channel = img.shape[-1] if len(img.shape) > 2 else 1
+        # free memory
+        del im_dir, im_file, img
 
     def visualize(self, imgs, name=None, smooth=False, **kwargs):
         return self._visualize(imgs, name=name, smooth=smooth, **kwargs)
@@ -331,16 +358,74 @@ class ImageDataset(Dataset):
     def flatten(self):
         return self._flatten
 
-    
-    def _process(self):
-        pass
-    
-    def _read_img(self, filename, return_obj=False):
-        pass
-        
-    def _visualize(self, imgs, name=None, smooth=False, **kwargs):
-        pass
+    @property
+    def num_classes(self):
+        return len(self._get_labels())
 
+    def _process(self):
+        im_dirs = self._get_label_dirs()
+        labels = self._get_labels()
+        total_examples = len([os.path.join(im_d, im) for im_d in im_dirs for im in os.listdir(im_d)])
+        # Features and labels shape
+        X_shape = [total_examples, self._size * self._size * self._channel]  # if it's flatten
+        y_shape = [total_examples, len(labels)]
+        if not self._flatten:
+            # adjust shape depending on grayscale: [n, s, s] = grayscale || [n, s, s, c] = no grayscale
+            X_shape = [total_examples, self._size, self._size] if self._grayscale else [total_examples, self._size,
+                                                                                        self._size, self._channel]
+        self._X = np.zeros(shape=X_shape)
+        self._y = np.zeros(shape=y_shape)
+        # Create features and labels
+        counter = 0
+        for i, im_dir in enumerate(im_dirs):
+            img_files = [os.path.join(im_dir, im_f) for im_f in os.listdir(im_dir) if im_f[0] != '.']
+            for j, img_file in enumerate(img_files):
+                # noinspection PyBroadException
+                try:
+                    self._X[counter] = self._read_img(img_file)
+                    self._y[counter] = self._to_one_hot(labels, i)
+                except Exception as e:
+                    sys.stderr.write(f'PROCESS_ERR: {e}\n')
+                    sys.stderr.flush()
+                finally:
+                    counter += 1
+                sys.stdout.write(f'\r{i+1} of {len(im_dirs)} labels\t{j+1} of {len(img_files)} images...')
+                sys.stdout.flush()
+        # Free memory
+        del im_dirs, labels, total_examples, X_shape, y_shape
+
+    def _read_img(self, filename, return_obj=False):
+        img = cv2.imread(filename, cv2.IMREAD_COLOR)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if self._grayscale else cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.resize(img, (self._size, self._size))
+        if return_obj:
+            return img
+        return img.flatten() if self._flatten else img
+
+    def _visualize(self, imgs, name=None, smooth=False, **kwargs):
+        # Plot images in grid
+        try:
+            import matplotlib.pyplot as plt
+        except ModuleNotFoundError as e:
+            sys.stderr.write(f'{e}')
+            sys.stderr.flush()
+
+        grid = int(np.sqrt(len(imgs)))
+        # Create figure with sub-plots.
+        fig, axes = plt.subplots(grid, grid)
+        fig.subplots_adjust(hspace=0.3, wspace=0.3)
+
+        for i, ax in enumerate(axes.flat):
+            # Interpolation type.
+            interpolation = 'spline16' if smooth else 'nearest'
+            shape = [self._size, self._size] if self._grayscale else [self._size, self._size, self._channel]
+            ax.imshow(imgs[i].reshape(shape), interpolation=interpolation, **kwargs)
+            # Remove ticks from the plot.
+            ax.set_xticks([])
+            ax.set_yticks([])
+        if name:
+            plt.suptitle(name)
+        plt.show()
 
 
 ################################################################################################
@@ -363,6 +448,7 @@ class TextDataset(Dataset):
 
     :param kwargs:
     """
+
     def __init__(self, window=2, max_word=None, **kwargs):
         super().__init__(**kwargs)
         self._window = window
@@ -407,7 +493,7 @@ class TextDataset(Dataset):
     @property
     def sentences(self):
         return self._sentences
-    
+
     def _process(self):
         # Creating features & labels
         self._X = np.zeros(shape=[len(self._sentences), self._vocab_size])
@@ -437,7 +523,6 @@ class TextDataset(Dataset):
         return temp
 
 
-
 ################################################################################################
 # +———————————————————————————————————————————————————————————————————————————————————————————+
 # | WordVectorization
@@ -459,13 +544,14 @@ class WordVectorization(Dataset):
         
     :param kwargs:
     """
+
     def __init__(self, size='sm', **kwargs):
         super().__init__(**kwargs)
         self._size = size
         self._glove_url = 'http://nlp.stanford.edu/data/glove.6B.zip'
         self._glove_dir = '.'.join(self._glove_url.split('/')[-1].split('.')[:-1])
         self._glove_dir = os.path.join(self._data_dir, self._glove_dir)
-        
+
         sizes = ['sm', 'md', 'lg', 'xl']
         GLOVE_FILES = [os.path.join(self._glove_dir, 'glove.6B.50d.txt'),
                        os.path.join(self._glove_dir, 'glove.6B.100d.txt'),
@@ -476,11 +562,11 @@ class WordVectorization(Dataset):
             raise ValueError(msg)
         index = sizes.index(self._size)
         self._glove_file = GLOVE_FILES[index]
-            
+
         # maybe download & extract file
         if not os.path.isfile(self._glove_file):
             confirm = input('Download glove file, 862MB? Y/n: ')
-            if 'y' in confirm.lower(): 
+            if 'y' in confirm.lower():
                 self.maybe_download_and_extract(self._glove_url, force=True)
             else:
                 sys.stderr.write('Acess denied! Download file to continue...')
@@ -488,7 +574,7 @@ class WordVectorization(Dataset):
                 raise FileNotFoundError(f'{self.glove_file} was not found. Download file to continue...')
         else:
             print(f'Apparently, `{self._glove_file}` has been downloaded and extracted.')
-    
+
     def _process(self):
         # load GloVe word vectors
         self._load_glove()
@@ -497,7 +583,7 @@ class WordVectorization(Dataset):
         # convert sentences to vectors
         # add to word vectors to features
         pass
-    
+
     def _sent2seq(self, sentence):
         tokens = word_tokenize(sentence)
         vectors = []
@@ -510,7 +596,7 @@ class WordVectorization(Dataset):
             vectors.append(vector)
             words.append(token)
         return np.asarray(vectors), words
-    
+
     def _visualize(self, sentence):
         vectors, words = self._sent2seq(sentence)
         mat = np.vstack(vectors)
@@ -523,7 +609,7 @@ class WordVectorization(Dataset):
 
         ax.set_yticklabels([''] + words)
         plt.show()
-    
+
     def _load_glove(self):
         self._glove_vector = {}
         with open(self._glove_file, mode='r', encoding='utf-8') as glove:
@@ -532,20 +618,21 @@ class WordVectorization(Dataset):
                 name, vector = line.split(' ', 1)
                 self._glove_vector[name] = np.fromstring(vector, sep=' ')
                 if self._logging:
-                    sys.stdout.write('\rLoading {:,} of {:,}'.format(i+1, len(lines)))
+                    sys.stdout.write('\rLoading {:,} of {:,}'.format(i + 1, len(lines)))
         return
 
     @property
     def glove_dir(self):
         return self._glove_dir
-    
+
     @property
     def glove_file(self):
         return self._glove_file
-    
+
     @property
     def glove_vector(self):
         return self._glove_vector
+
 
 """
 if __name__ == '__main__':
