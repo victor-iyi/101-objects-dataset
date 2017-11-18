@@ -2,14 +2,13 @@
   @author Victor I. Afolabi
   A.I. Engineer & Software developer
   javafolabi@gmail.com
-  
+
   Created on 02 November, 2017 @ 11:24 PM.
-  
+
   Copyright © 2017. Victor. All rights reserved.
 """
 import os
 import sys
-import shutil
 import pickle
 import tarfile
 import zipfile
